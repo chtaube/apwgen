@@ -96,6 +96,11 @@ Example Output
 
 ```wurmos-8ajkim-citFox```
 
+## Correctness
+
+The scripts/colorplot.py script generates a heatmap to visualize character distribution in generated passphrases. This helps analyze randomness and placement of numbers and upper case characters.
+
+![](distribution.png)
 
 
 ## References
