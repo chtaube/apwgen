@@ -1,4 +1,5 @@
 from sys import argv
 from .apwgen import main
 
-exit(main(argv))
+if __name__ == '__main__':
+    exit(main(argv))
