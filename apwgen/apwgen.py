@@ -10,14 +10,18 @@ import sys
 import os
 import textwrap
 from types import SimpleNamespace
+from importlib.metadata import version, PackageNotFoundError
 
-__author__ = 'Christian Taube <info@chtaube.de>'
-__version__ = '1.1.0'
 
-DEFAULT_VOWELS      = 'aeiouy'
-DEFAULT_CONSONANTS  = 'bcdfghjkmnpqrstvwxz'
-DEFAULT_NUMERICS    = '0123456789'
-DEFAULT_DELIMITERS  = '-'
+DEFAULT_VOWELS = 'aeiouy'
+DEFAULT_CONSONANTS = 'bcdfghjkmnpqrstvwxz'
+DEFAULT_NUMERICS = '0123456789'
+DEFAULT_DELIMITERS = '-'
+
+try:
+    __version__ = version("apwgen")
+except PackageNotFoundError:
+    __version__ = None
 
 
 def generate_syllable(vowels, consonants):
@@ -30,6 +34,7 @@ def generate_syllable(vowels, consonants):
                 + secrets.choice(consonants))
     return syllable
 
+
 def syllable_length():
     '''
     Return the length of a syllable.
@@ -40,6 +45,7 @@ def syllable_length():
     '''
     return 3
 
+
 def generate_word(num_syllables, vowels, consonants):
     '''
     Generate a word, consisting of any number of syllabes as defined in
@@ -47,7 +53,8 @@ def generate_word(num_syllables, vowels, consonants):
     '''
     if num_syllables <= 0:
         raise ValueError('Number of syllables must be positive.')
-    return ''.join(generate_syllable(vowels, consonants) for _ in range(num_syllables))
+    return ''.join(generate_syllable(vowels, consonants)
+                   for _ in range(num_syllables))
 
 
 def generate_wordlist(num_words, num_syllables, vowels, consonants):
@@ -78,8 +85,8 @@ def randomized_delimiter_join(words, delimiters):
 
 def choose_delimiter(delimiters):
     '''
-    From the supplied list of delimiters, choose one randomly, or when only one
-    delimiter is supplied, return this one.
+    From the supplied list of delimiters, choose one randomly, or when only
+    one delimiter is supplied, return this one.
     '''
     delimiters_length = len(delimiters)
     if delimiters_length == 1:
@@ -99,6 +106,7 @@ def get_possible_digit_positions(options):
         raise ValueError('Number of words must not be zero.')
     if options.syllables <= 0:
         raise ValueError('Number of syllables must not be zero.')
+    # Using no delimiters is a valid option, currently.
     if len(options.delimiters) > 0:
         delimiter_length = 1
     else:
@@ -135,11 +143,15 @@ def replace_in_passphrase(passphrase, position, fn_modifier):
     function which has the character to be replaced as a parameter.
     '''
     if len(passphrase) <= 0:
-        raise ValueError('In replace_in_password(), passphrase must not be empty.')
+        raise ValueError(
+                'In replace_in_password(), passphrase must not be empty.')
     if position < 0:
-        raise ValueError('In replace_in_password(), position must no be negative.')
+        raise ValueError(
+                'In replace_in_password(), position must no be negative.')
     if position >= len(passphrase):
-        raise ValueError('In replace_in_password(), position must not exceed length of passphrase.')
+        raise ValueError(
+                'In replace_in_password(), position must not exceed length '
+                + 'of passphrase.')
 
     passphrase_list = list(passphrase)
     passphrase_list[position] = fn_modifier(passphrase_list[position])
@@ -148,7 +160,8 @@ def replace_in_passphrase(passphrase, position, fn_modifier):
 
 def get_default_options():
     '''
-    Helper function, primarily for the case when this is loaded as a Python module.
+    Helper function, primarily for the case when this is loaded
+    as a Python module.
     '''
     options = SimpleNamespace()
     options.count = 1
@@ -182,8 +195,9 @@ def generate_passphrase(options):
         maybe_digits = get_possible_digit_positions(options)
 
     if len(maybe_digits) < options.num_digits:
-        raise ValueError(f'Too many digits requested (requested {options.num_digits} '
-                         + f'of {len(maybe_digits)} available).')
+        raise ValueError('Too many digits requested (requested '
+                         + f'{options.num_digits} of '
+                         + f'{len(maybe_digits)} available).')
     if options.num_digits > len(maybe_digits):
         raise ValueError(f'Cannot insert {options.num_digits} digits, '
                          + f'only {len(maybe_digits)} positions available.')
@@ -247,7 +261,8 @@ class ApwgenArgumentParser(argparse.ArgumentParser):
         self.add_argument(
                 '-s', '--syllables',
                 type=int, default=2,
-                help='Specify the number of syllables a single word should contain.')
+                help='Specify the number of syllables a single word '
+                + 'should contain.')
         self.add_argument(
                 '-c', '--count',
                 type=int, default=1,
@@ -263,9 +278,9 @@ class ApwgenArgumentParser(argparse.ArgumentParser):
         self.add_argument(
                 '-a', '--allnums',
                 action='store_true',
-                help='Allow digits to be placed on a any position. Otherwise they '
-                + 'will be allowed only before or after a delimiter and on the last '
-                + 'position.')
+                help='Allow digits to be placed on a any position. Otherwise '
+                + 'they will be allowed only before or after a delimiter and '
+                + 'on the last position.')
         self.add_argument(
                 '-d', '--delimiters', type=str, default=DEFAULT_DELIMITERS,
                 help='Delimiter(s) to put between words. '
@@ -293,8 +308,8 @@ class ApwgenVersion(argparse.Action):
             {parser.prog} Version {__version__}
             A phoneme-based passphrase generator inspired by the Apple Passwords app.
 
-            Written by {__author__}
             Licensed under the European Union Public License Version 1.2 (EUPL-v1.2)
+            https://github.com/chtaube/apwgen
         ''').strip())
         parser.exit()
 
@@ -305,27 +320,35 @@ def validate_options(parser, options):
     '''
     # basic boundary checks
     if options.words <= 0:
-        parser.error('The number of words (-w/--words) must be greater than zero.')
+        parser.error(
+                'The number of words (-w/--words) must be greater than zero.')
     if options.syllables <= 0:
-        parser.error('The number of syllables per word (-s/--syllables) must be greater than zero.')
+        parser.error(
+                'The number of syllables per word (-s/--syllables) must be '
+                + 'greater than zero.')
     if options.count <= 0:
         parser.error('The number of passphrases to generate (-c/--count) '
                      + 'must be greater than zero.')
     if options.num_digits < 0:
-        parser.error('The number of digits (-d/--numdigits) cannot be negative.')
+        parser.error(
+                'The number of digits (-d/--numdigits) cannot be negative.')
     if options.upper < 0:
-        parser.error('The number of uppercase letters (-u/--upper) cannot be negative.')
+        parser.error(
+                'The number of uppercase letters (-u/--upper) cannot '
+                + 'be negative.')
     # check related parameters
     lc_avail = syllable_length() * options.syllables * options.words
     if options.allnums:
         if options.num_digits > (lc_avail - options.upper):
             parser.error(
-                    'Sum of digits and upper case characters requested exceeds '
-                    + f'length of passphrase ({options.num_digits} digits + '
-                    + f'{options.upper} upper case > {lc_avail} available).')
+                    'Sum of digits and upper case characters requested '
+                    + 'exceeds length of passphrase '
+                    + f'({options.num_digits} digits + {options.upper} '
+                    + f'upper case > {lc_avail} available).')
     else:
         if options.num_digits > (2*options.words-1):
-            parser.error('Too many digits requested. Maybe try adding --allnums?')
+            parser.error(
+                    'Too many digits requested. Maybe try adding --allnums?')
     if options.upper > (lc_avail - options.num_digits):
         parser.error(
                 'Sum of digits and upper case characters requested exceeds '
