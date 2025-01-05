@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apwgen"
+description = "A phoneme-based passphrase generator"
+authors = [
+    { name = "Christian Taube", email = "info@chtaube.de" }
+]
+dynamic = ["version"]
+dependencies = [
+#    "secrets",
+#    "numpy",
+#    "matplotlib",
+#    "seaborn"
+]
+requires-python = ">=3.6"
+license = { text = "EUPL-1.2" }
+
+[tool.setuptools]
+packages = ["apwgen"]
+
+[tool.setuptools_scm]
+write_to = "apwgen/_version.py"  # Stores auto-generated version
+

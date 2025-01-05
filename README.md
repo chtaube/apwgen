@@ -6,6 +6,12 @@ Apwgen is a command-line tool designed to generate secure, yet memorable, passph
 
 The program leverages the [secrets](https://docs.python.org/3/library/secrets.html) library, ensuring cryptographically secure randomness. It requires Python 3.6 or later.
 
+## Installation
+
+Clone the repository and install with:
+```bash
+pip install .
+```
 
 ## Usage
 
