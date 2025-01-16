@@ -72,14 +72,16 @@ def generate_wordlist(num_words, num_syllables, vowels, consonants):
 def randomized_delimiter_join(words, delimiters):
     '''
     Join the words into a passphrase with random delimiters between each word.
-    Raises ValueError when there is only word, so no delimiters can be added.
+    Raises ValueError when there is only word, so no delimiters can be added,
+    unless no delimiters where requested.
     '''
     passphrase = words[0]
-    if len(words) > 1:
-        for word in words[1:]:
-            passphrase += choose_delimiter(delimiters) + word
-    else:
-        raise ValueError('Not enough words to add delimiter between.')
+    if len(delimiters) > 0:
+        if len(words) > 1:
+            for word in words[1:]:
+                passphrase += choose_delimiter(delimiters) + word
+        else:
+            raise ValueError('Not enough words to add delimiter between.')
     return passphrase
 
 
