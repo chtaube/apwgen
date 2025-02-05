@@ -39,12 +39,12 @@ options:
                         they will be allowed only before or after a delimiter
                         and on the last position.
   -d, --delimiters DELIMITERS
-                        Delimiter(s) to put between words. Default: '-'
-  --vowels VOWELS       List of vowels to choose from. Default: 'aeiouy'
+                        Delimiter(s) to put between words. Default: "-"
+  --vowels VOWELS       List of vowels to choose from. Default: "aeiouy"
   --consonants CONSONANTS
                         List of consonants to choose from. Default:
-                        'bcdfghjkmnpqrstvwxz'
-  --numerics NUMERICS   List of numerics to choose from. Default: '0123456789'
+                        "bcdfghjkmnpqrstvwxz"
+  --numerics NUMERICS   List of numerics to choose from. Default: "0123456789"
 ```
 
 Basic Usage
@@ -67,13 +67,23 @@ norsihpuw-tUtguwdu4
 Custom Delimiters and Multiple Passphrases
 
 ```
-$ ./apwgen.py -w4 -d ':-/' -c5
+$ ./apwgen.py -w4 -d ":-/" -c5
 pazket/Dircax:3ojwiz/zactyh
 micvot-detti2:gyfsax:Cizfej
 rymxot:vutbar-kitvum/6opriK
 hyrpuv/fyxkyb-9awkyf:tuQwif
 jonvi3/nenwoh-vawpac-rUwbov
 ```
+
+Single word without upper case characters (this needs -d="")
+
+This might be useful for generating a randomized prefix/suffix for usernames, mail addresses, etc. Don't use this for passwords!
+
+```
+$ ./apwgen -w1 -u0 -d=""
+wikwe0
+```
+
 
 ## Password Format
 
