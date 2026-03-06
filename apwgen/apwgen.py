@@ -131,11 +131,9 @@ def get_lc_positions(passphrase):
     Returns a list of lower case character positions.
     '''
     lc_positions = []
-    i = 0
-    for c in passphrase:
+    for i, c in enumerate(passphrase):
         if c.isalpha() and c.islower():
             lc_positions.append(i)
-        i += 1
     return lc_positions
 
 
@@ -149,7 +147,7 @@ def replace_in_passphrase(passphrase, position, fn_modifier):
                 'In replace_in_password(), passphrase must not be empty.')
     if position < 0:
         raise ValueError(
-                'In replace_in_password(), position must no be negative.')
+                'In replace_in_password(), position must not be negative.')
     if position >= len(passphrase):
         raise ValueError(
                 'In replace_in_password(), position must not exceed length '
@@ -174,7 +172,7 @@ def get_default_options():
     options.upper = 1
     options.vowels = DEFAULT_VOWELS
     options.consonants = DEFAULT_CONSONANTS
-    options.numbers = DEFAULT_NUMERICS
+    options.numerics = DEFAULT_NUMERICS
     options.delimiters = DEFAULT_DELIMITERS
     return options
 
@@ -200,16 +198,13 @@ def generate_passphrase(options):
         raise ValueError('Too many digits requested (requested '
                          + f'{options.num_digits} of '
                          + f'{len(maybe_digits)} available).')
-    if options.num_digits > len(maybe_digits):
-        raise ValueError(f'Cannot insert {options.num_digits} digits, '
-                         + f'only {len(maybe_digits)} positions available.')
 
     if options.num_digits > 0:
         for _ in range(options.num_digits):
             passphrase = replace_in_passphrase(
                     passphrase,
                     maybe_digits.pop(secrets.randbelow(len(maybe_digits))),
-                    lambda _: secrets.choice(DEFAULT_NUMERICS))
+                    lambda _: secrets.choice(options.numerics))
 
     # add upper case
     lc_positions = get_lc_positions(passphrase)
@@ -333,7 +328,7 @@ def validate_options(parser, options):
                      + 'must be greater than zero.')
     if options.num_digits < 0:
         parser.error(
-                'The number of digits (-d/--numdigits) cannot be negative.')
+                'The number of digits (-n/--numdigits) cannot be negative.')
     if options.upper < 0:
         parser.error(
                 'The number of uppercase letters (-u/--upper) cannot '
