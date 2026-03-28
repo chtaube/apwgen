@@ -17,6 +17,7 @@ DEFAULT_VOWELS = 'aeiouy'
 DEFAULT_CONSONANTS = 'bcdfghjkmnpqrstvwxz'
 DEFAULT_NUMERICS = '0123456789'
 DEFAULT_DELIMITERS = '-'
+SYLLABLE_LENGTH = 3
 
 try:
     __version__ = version("apwgen")
@@ -33,17 +34,6 @@ def generate_syllable(vowels, consonants):
                 + secrets.choice(vowels)
                 + secrets.choice(consonants))
     return syllable
-
-
-def syllable_length():
-    '''
-    Return the length of a syllable.
-    Currently, syllables have a fixed length of 3. So this function simply
-    returns 3.
-    You could calculate this with len(generate_syllable(...)) but this
-    would unnecessarily drain the entropy pool.
-    '''
-    return 3
 
 
 def generate_word(num_syllables, vowels, consonants):
@@ -118,10 +108,10 @@ def get_possible_digit_positions(options):
         if i > 0:
             result.append(
                     i * delimiter_length
-                    + i * options.syllables * syllable_length())
+                    + i * options.syllables * SYLLABLE_LENGTH)
         result.append(
                 i * delimiter_length
-                + (i+1) * options.syllables * syllable_length()
+                + (i+1) * options.syllables * SYLLABLE_LENGTH
                 - 1)
     return result
 
@@ -334,7 +324,7 @@ def validate_options(parser, options):
                 'The number of uppercase letters (-u/--upper) cannot '
                 + 'be negative.')
     # check related parameters
-    lc_avail = syllable_length() * options.syllables * options.words
+    lc_avail = SYLLABLE_LENGTH * options.syllables * options.words
     if options.allnums:
         if options.num_digits > (lc_avail - options.upper):
             parser.error(
