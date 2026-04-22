@@ -8,6 +8,7 @@ import argparse
 import secrets
 import sys
 import os
+import math
 import textwrap
 from types import SimpleNamespace
 from importlib.metadata import version, PackageNotFoundError
@@ -17,7 +18,26 @@ DEFAULT_VOWELS = 'aeiouy'
 DEFAULT_CONSONANTS = 'bcdfghjkmnpqrstvwxz'
 DEFAULT_NUMERICS = '0123456789'
 DEFAULT_DELIMITERS = '-'
-SYLLABLE_LENGTH = 3
+
+''' This pattern list is weighted, with the top entry
+    having the highest probability.
+'''
+SYLLABLE_PATTERNS = [
+        lambda v, c: c() + v() + c(),
+        lambda v, c: c() + v() + v() + c(),
+        lambda v, c: c() + v() + v(),
+        lambda v, c: c() + v(),
+        lambda v, c: v() + c(),
+    ]
+
+# (num_consonants, num_vowels) per pattern — must stay in sync with SYLLABLE_PATTERNS
+SYLLABLE_STRUCTURES = (
+        (2, 1),  # CVC
+        (2, 2),  # CVVC
+        (1, 2),  # CVV
+        (1, 1),  # CV
+        (1, 1),  # VC
+    )
 
 try:
     __version__ = version("apwgen")
@@ -25,15 +45,104 @@ except PackageNotFoundError:
     __version__ = None
 
 
-def generate_syllable(vowels, consonants):
+def _passphrase_length_pmf(options):
     '''
-    Generate a syllable, consisting of a consonant, a vowel
-    and another consonant.
+    Return the probability mass function of passphrase length (words + delimiters),
+    before digit/uppercase substitutions (which don't change length).
     '''
-    syllable = (secrets.choice(consonants)
-                + secrets.choice(vowels)
-                + secrets.choice(consonants))
-    return syllable
+    n = len(SYLLABLE_PATTERNS)
+    probs = [(2 * (n - 1 - k) + 1) / (n * n) for k in range(n)]
+    syl_pmf = {}
+    for p, (nc_t, nv_t) in zip(probs, SYLLABLE_STRUCTURES):
+        length = nc_t + nv_t
+        syl_pmf[length] = syl_pmf.get(length, 0.0) + p
+
+    pmf = {0: 1.0}
+    for _ in range(options.words * options.syllables):
+        new = {}
+        for l1, p1 in pmf.items():
+            for l2, p2 in syl_pmf.items():
+                key = l1 + l2
+                new[key] = new.get(key, 0.0) + p1 * p2
+        pmf = new
+
+    delimiter_len = (options.words - 1) if len(options.delimiters) > 0 else 0
+    if delimiter_len > 0:
+        pmf = {length + delimiter_len: p for length, p in pmf.items()}
+    return pmf
+
+
+def entropy_bits(options):
+    '''
+    Estimate the entropy in bits of a passphrase generated with the given options.
+    Accounts for the non-uniform syllable type distribution of weighted_random()
+    and the rejection sampling effect of --length.
+    '''
+    n = len(SYLLABLE_PATTERNS)
+    # probability of each syllable type under weighted_random(n):
+    # type k is picked when int(sqrt(r)) == n-1-k, which covers (2*(n-1-k)+1) values of r
+    probs = [(2 * (n - 1 - k) + 1) / (n * n) for k in range(n)]
+    nc = len(options.consonants)
+    nv = len(options.vowels)
+
+    h_type = -sum(p * math.log2(p) for p in probs)
+    h_chars = sum(
+            p * (nc_t * math.log2(nc) + nv_t * math.log2(nv))
+            for p, (nc_t, nv_t) in zip(probs, SYLLABLE_STRUCTURES))
+    h_words = options.words * options.syllables * (h_type + h_chars)
+
+    if options.num_digits > 0:
+        if options.allnums:
+            avg_syl_len = sum(p * (nc_t + nv_t)
+                              for p, (nc_t, nv_t) in zip(probs, SYLLABLE_STRUCTURES))
+            num_pos = int(options.words * options.syllables * avg_syl_len)
+        else:
+            num_pos = 2 * options.words - 1
+        h_digits = sum(
+                math.log2(num_pos - i) + math.log2(len(options.numerics))
+                for i in range(min(options.num_digits, num_pos)))
+    else:
+        h_digits = 0.0
+
+    if options.upper > 0:
+        avg_syl_len = sum(p * (nc_t + nv_t)
+                          for p, (nc_t, nv_t) in zip(probs, SYLLABLE_STRUCTURES))
+        avg_lc = options.words * options.syllables * avg_syl_len - options.num_digits
+        h_upper = sum(math.log2(avg_lc - i)
+                      for i in range(min(options.upper, int(avg_lc))))
+    else:
+        h_upper = 0.0
+
+    h_delimiters = (options.words - 1) * math.log2(max(1, len(options.delimiters)))
+
+    # --length applies rejection sampling: passphrases shorter than the threshold
+    # are discarded. This conditions the distribution on len >= L, reducing entropy
+    # by log2(P(len >= L)).
+    if options.length is not None:
+        pmf = _passphrase_length_pmf(options)
+        p_accept = sum(p for length, p in pmf.items() if length >= options.length)
+        h_length = math.log2(p_accept) if p_accept > 0 else -math.inf
+    else:
+        h_length = 0.0
+
+    return h_words + h_digits + h_upper + h_delimiters + h_length
+
+
+def weighted_random(n):
+    '''
+    Return a weighted random number in the range 0 and (n-1).
+    '''
+    r = secrets.randbelow(n * n)
+    return (n - 1) - int(math.sqrt(r))
+
+
+def generate_syllable(syllable_type, vowels, consonants):
+    '''
+    Generate a syllable
+    '''
+    v = lambda: secrets.choice(vowels)
+    c = lambda: secrets.choice(consonants)
+    return SYLLABLE_PATTERNS[syllable_type](v, c)
 
 
 def generate_word(num_syllables, vowels, consonants):
@@ -43,7 +152,9 @@ def generate_word(num_syllables, vowels, consonants):
     '''
     if num_syllables <= 0:
         raise ValueError('Number of syllables must be positive.')
-    return ''.join(generate_syllable(vowels, consonants)
+
+    return ''.join(generate_syllable(weighted_random(len(SYLLABLE_PATTERNS)),
+                                     vowels, consonants)
                    for _ in range(num_syllables))
 
 
@@ -53,10 +164,8 @@ def generate_wordlist(num_words, num_syllables, vowels, consonants):
     '''
     if num_words <= 0:
         raise ValueError('Number of words must be positive.')
-    wordlist = []
-    for _ in range(num_words):
-        wordlist.append(generate_word(num_syllables, vowels, consonants))
-    return wordlist
+    return [generate_word(num_syllables, vowels, consonants)
+            for _ in range(num_words)]
 
 
 def randomized_delimiter_join(words, delimiters):
@@ -65,13 +174,13 @@ def randomized_delimiter_join(words, delimiters):
     Raises ValueError when there is only word, so no delimiters can be added,
     unless no delimiters where requested.
     '''
+    if len(delimiters) == 0:
+        return ''.join(words)
+    if len(words) == 1:
+        raise ValueError('Not enough words to add delimiter between.')
     passphrase = words[0]
-    if len(delimiters) > 0:
-        if len(words) > 1:
-            for word in words[1:]:
-                passphrase += choose_delimiter(delimiters) + word
-        else:
-            raise ValueError('Not enough words to add delimiter between.')
+    for word in words[1:]:
+        passphrase += choose_delimiter(delimiters) + word
     return passphrase
 
 
@@ -80,39 +189,22 @@ def choose_delimiter(delimiters):
     From the supplied list of delimiters, choose one randomly, or when only
     one delimiter is supplied, return this one.
     '''
-    delimiters_length = len(delimiters)
-    if delimiters_length == 1:
-        return delimiters
-    if delimiters_length > 1:
-        return secrets.choice(delimiters)
-    return ''
+    return secrets.choice(delimiters)
 
 
-def get_possible_digit_positions(options):
-    '''
-    Returns a list of valid positions to add numbers. This is the
-    character before or after a delimiter, or at the very last character
-    position of the passphrase.
-    '''
-    if options.words <= 0:
+def get_possible_digit_positions(wordlist, delimiter_len=1):
+    if len(wordlist) <= 0:
         raise ValueError('Number of words must not be zero.')
-    if options.syllables <= 0:
-        raise ValueError('Number of syllables must not be zero.')
-    # Using no delimiters is a valid option, currently.
-    if len(options.delimiters) > 0:
-        delimiter_length = 1
-    else:
-        delimiter_length = 0
     result = []
-    for i in range(options.words):
+    total_length = 0
+    for i in range(0, len(wordlist)):
         if i > 0:
-            result.append(
-                    i * delimiter_length
-                    + i * options.syllables * SYLLABLE_LENGTH)
-        result.append(
-                i * delimiter_length
-                + (i+1) * options.syllables * SYLLABLE_LENGTH
-                - 1)
+            result.append(total_length)
+        result.append(total_length + len(wordlist[i]) - 1)
+
+        total_length += len(wordlist[i])
+        if i < len(wordlist) - 1:
+            total_length += delimiter_len
     return result
 
 
@@ -134,13 +226,13 @@ def replace_in_passphrase(passphrase, position, fn_modifier):
     '''
     if len(passphrase) <= 0:
         raise ValueError(
-                'In replace_in_password(), passphrase must not be empty.')
+                'In replace_in_passphrase(), passphrase must not be empty.')
     if position < 0:
         raise ValueError(
-                'In replace_in_password(), position must not be negative.')
+                'In replace_in_passphrase(), position must not be negative.')
     if position >= len(passphrase):
         raise ValueError(
-                'In replace_in_password(), position must not exceed length '
+                'In replace_in_passphrase(), position must not exceed length '
                 + 'of passphrase.')
 
     passphrase_list = list(passphrase)
@@ -164,6 +256,9 @@ def get_default_options():
     options.consonants = DEFAULT_CONSONANTS
     options.numerics = DEFAULT_NUMERICS
     options.delimiters = DEFAULT_DELIMITERS
+    options.strict = False
+    options.length = None
+    options.entropy = False
     return options
 
 
@@ -172,40 +267,47 @@ def generate_passphrase(options):
     Generate a single passphrase, with all options applied
     (except options.count).
     '''
-    passphrase = randomized_delimiter_join(
-            generate_wordlist(
+    n = 0
+    while True:
+        n += 1
+        wordlist = generate_wordlist(
                 options.words, options.syllables,
-                options.vowels, options.consonants),
-            options.delimiters)
+                options.vowels, options.consonants)
+
+        passphrase = randomized_delimiter_join(wordlist, options.delimiters)
+        if options.length is None:
+            break
+        if len(passphrase) >= options.length:
+            break
+        if n >= 1000:
+            raise ValueError('Couldn\'t generate passphrase with specified minimum length.')
 
     # add digits
     if options.allnums:
         maybe_digits = get_lc_positions(passphrase)
     else:
-        maybe_digits = get_possible_digit_positions(options)
+        maybe_digits = get_possible_digit_positions(wordlist,
+                                                    1 if options.delimiters else 0)
 
-    if len(maybe_digits) < options.num_digits:
-        raise ValueError('Too many digits requested (requested '
-                         + f'{options.num_digits} of '
-                         + f'{len(maybe_digits)} available).')
-
-    if options.num_digits > 0:
-        for _ in range(options.num_digits):
-            passphrase = replace_in_passphrase(
-                    passphrase,
-                    maybe_digits.pop(secrets.randbelow(len(maybe_digits))),
-                    lambda _: secrets.choice(options.numerics))
+    if options.strict and len(maybe_digits) < options.num_digits:
+        raise ValueError('Too many digits requested ('
+                         + f'{options.num_digits} / '
+                         + f'{len(maybe_digits)}).')
+    for _ in range(min(options.num_digits, len(maybe_digits))):
+        passphrase = replace_in_passphrase(
+                passphrase,
+                maybe_digits.pop(secrets.randbelow(len(maybe_digits))),
+                lambda _: secrets.choice(options.numerics))
 
     # add upper case
     lc_positions = get_lc_positions(passphrase)
-    if len(lc_positions) < options.upper:
+    if options.strict and len(lc_positions) < options.upper:
         raise ValueError('Too many upper case characters requested.')
-    if options.upper > 0:
-        for _ in range(options.upper):
-            passphrase = replace_in_passphrase(
-                    passphrase,
-                    lc_positions.pop(secrets.randbelow(len(lc_positions))),
-                    lambda c: c.upper())
+    for _ in range(min(options.upper, len(lc_positions))):
+        passphrase = replace_in_passphrase(
+                passphrase,
+                lc_positions.pop(secrets.randbelow(len(lc_positions))),
+                lambda c: c.upper())
 
     return passphrase
 
@@ -214,11 +316,27 @@ def emit_passphrases(options):
     '''
     Output any number of passphrases to the terminal.
     '''
+    err = 0
     for i in range(options.count):
         try:
             print(generate_passphrase(options))
         except ValueError as e:
-            print(f"Error generating passphrase {i+1}: {e}", file=sys.stderr)
+            if options.count == 1:
+                print(f" {e}", file=sys.stderr)
+                break
+            else:
+                err += 1
+                last_err = e
+    if err > 0:
+        print(f" Passphrase generation failed for {err} passphrases. "
+              + "Check your options and retry. Last error was: \n"
+              + f" {last_err}", file=sys.stderr)
+    if options.entropy:
+        bits = entropy_bits(options)
+        if math.isinf(bits):
+            print("Estimated entropy: n/a (minimum length is unreachable)")
+        else:
+            print(f"Estimated entropy: {bits:.1f} bits")
 
 
 class ApwgenArgumentParser(argparse.ArgumentParser):
@@ -234,9 +352,9 @@ class ApwgenArgumentParser(argparse.ArgumentParser):
     def _add_arguments(self):
         '''
         Arguments needed for this program.
-        Note: Put the defaults in double quotes for presenting to the user.
-        Windows command line accepts strings in double quotes only. Single
-        quotes are used literally as parameter for an argument.
+        Note: Within the help text, always put the defaults in double quotes.
+        Windows command line accepts strings in double quotes only.
+        Single quotes are used literally as parameter for an argument.
         '''
         self.add_argument(
                 '--version', action=ApwgenVersion, nargs=0,
@@ -263,6 +381,10 @@ class ApwgenArgumentParser(argparse.ArgumentParser):
                 type=int, default=1,
                 help='Number of digits to include in passphrase.')
         self.add_argument(
+                '-l', '--length',
+                type=int, default=None,
+                help='Ensure a minimum password length after all modifiers were applied.')
+        self.add_argument(
                 '-a', '--allnums',
                 action='store_true',
                 help='Allow digits to be placed on a any position. Otherwise '
@@ -284,7 +406,14 @@ class ApwgenArgumentParser(argparse.ArgumentParser):
                 '--numerics', type=str, default=DEFAULT_NUMERICS,
                 help='Specify the digit pool. '
                 + f'Default: "{DEFAULT_NUMERICS}"')
-
+        self.add_argument(
+                '--strict',
+                action='store_true',
+                help='Ensure all modifiers (upper case, digits) could be applied. ')
+        self.add_argument(
+                '-e', '--entropy',
+                action='store_true',
+                help='Show estimated entropy in bits after generating passphrases.')
 
 class ApwgenVersion(argparse.Action):
     '''
@@ -313,7 +442,7 @@ def validate_options(parser, options):
         parser.error(
                 'The number of syllables per word (-s/--syllables) must be '
                 + 'greater than zero.')
-    if options.count <= 0:
+    if options.count < 0:
         parser.error('The number of passphrases to generate (-c/--count) '
                      + 'must be greater than zero.')
     if options.num_digits < 0:
@@ -324,23 +453,26 @@ def validate_options(parser, options):
                 'The number of uppercase letters (-u/--upper) cannot '
                 + 'be negative.')
     # check related parameters
-    lc_avail = SYLLABLE_LENGTH * options.syllables * options.words
-    if options.allnums:
-        if options.num_digits > (lc_avail - options.upper):
-            parser.error(
-                    'Sum of digits and upper case characters requested '
-                    + 'exceeds length of passphrase '
-                    + f'({options.num_digits} digits + {options.upper} '
-                    + f'upper case > {lc_avail} available).')
-    else:
-        if options.num_digits > (2*options.words-1):
-            parser.error(
-                    'Too many digits requested. Maybe try adding --allnums?')
-    if options.upper > (lc_avail - options.num_digits):
-        parser.error(
-                'Sum of digits and upper case characters requested exceeds '
-                + f'length of passphrase ({options.num_digits} digits + '
-                + f'{options.upper} upper case > {lc_avail} available).')
+    #FIXME: These checks won't work well with variable password length
+    # and have been disabled.
+
+    #lc_avail = SYLLABLE_LENGTH * options.syllables * options.words
+    #if options.allnums:
+    #    if options.num_digits > (lc_avail - options.upper):
+    #        parser.error(
+    #                'Sum of digits and upper case characters requested '
+    #                + 'exceeds length of passphrase '
+    #                + f'({options.num_digits} digits + {options.upper} '
+    #                + f'upper case > {lc_avail} available).')
+    #else:
+    #    if options.num_digits > (2*options.words-1):
+    #        parser.error(
+    #                'Too many digits requested. Maybe try adding --allnums?')
+    #if options.upper > (lc_avail - options.num_digits):
+    #    parser.error(
+    #            'Sum of digits and upper case characters requested exceeds '
+    #            + f'length of passphrase ({options.num_digits} digits + '
+    #            + f'{options.upper} upper case > {lc_avail} available).')
 
 
 def main(argv=None):

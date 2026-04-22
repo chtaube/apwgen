@@ -17,12 +17,11 @@ pip install .
 
 Apwgen is used via the command line, with several configurable arguments to customize the passphrase generation process.
 
-
 ```
-usage: apwgen.py [-h] [--version] [-w WORDS] [-s SYLLABLES] [-c COUNT]
-                 [-u UPPER] [-n NUM_DIGITS] [-a] [-d DELIMITERS]
-                 [--vowels VOWELS] [--consonants CONSONANTS]
-                 [--numerics NUMERICS]
+usage: apwgen [-h] [--version] [-w WORDS] [-s SYLLABLES] [-c COUNT]
+              [-u UPPER] [-n NUM_DIGITS] [-l LENGTH] [-a] [-d DELIMITERS]
+              [--vowels VOWELS] [--consonants CONSONANTS]
+              [--numerics NUMERICS] [--strict] [-e]
 
 options:
   -h, --help            show this help message and exit
@@ -35,39 +34,46 @@ options:
   -u, --upper UPPER     Number of upper case characters to include.
   -n, --numdigits NUM_DIGITS
                         Number of digits to include in passphrase.
+  -l, --length LENGTH   Ensure a minimum password length after all modifiers
+                        were applied.
   -a, --allnums         Allow digits to be placed on a any position. Otherwise
                         they will be allowed only before or after a delimiter
                         and on the last position.
   -d, --delimiters DELIMITERS
                         Delimiter(s) to put between words. Default: "-"
-  --vowels VOWELS       List of vowels to choose from. Default: "aeiouy"
+  --vowels VOWELS       Specifies the vowel pool for syllables. Default:
+                        "aeiouy"
   --consonants CONSONANTS
-                        List of consonants to choose from. Default:
+                        Specifies the consonant pool for syllables. Default:
                         "bcdfghjkmnpqrstvwxz"
-  --numerics NUMERICS   List of numerics to choose from. Default: "0123456789"
+  --numerics NUMERICS   Specify the digit pool. Default: "0123456789"
+  --strict              Ensure all modifiers (upper case, digits) could be
+                        applied.
+  -e, --entropy         Show estimated entropy in bits after generating
+                        passphrases.
 ```
 
 Basic Usage
 
 ```
-$ ./apwgen.py
+$ apwgen
 ryrhUx-cuqgiq-8yqcet
 ```
 
 Customizing Syllables and Words
 
 ```
-$ ./apwgen.py -s3
+$ apwgen -s3
 wonpebcy4-baptyjvaq-dymwaVmet
 
-$ ./apwgen.py -s3 -w2
+$ apwgen -s3 -w2
 norsihpuw-tUtguwdu4
 ```
 
 Custom Delimiters and Multiple Passphrases
 
 ```
-$ ./apwgen.py -w4 -d ":-/" -c5
+$ apwgen -w4 -d ":-/" -c5
 pazket/Dircax:3ojwiz/zactyh
 micvot-detti2:gyfsax:Cizfej
 rymxot:vutbar-kitvum/6opriK
@@ -75,19 +81,48 @@ hyrpuv/fyxkyb-9awkyf:tuQwif
 jonvi3/nenwoh-vawpac-rUwbov
 ```
 
-Single word without upper case characters (this needs -d="")
+Single word without upper case characters (this needs `-d=""`)
 
 This might be useful for generating a randomized prefix/suffix for usernames, mail addresses, etc. Don't use this for passwords!
 
 ```
-$ ./apwgen -w1 -u0 -d=""
+$ apwgen -w1 -u0 -d=""
 wikwe0
+```
+
+Minimum length
+
+```
+$ apwgen -l 24
+vurxaFpuo-toapiic-6urqoah
+```
+
+Show entropy estimate
+
+```
+$ apwgen -e
+kibMez-syucyr-5yadiw
+Estimated entropy: 86.9 bits
+
+$ apwgen -l 24 -e
+vurxaFpuo-toapiic-6urqoah
+Estimated entropy: 85.3 bits
 ```
 
 
 ## Password Format
 
-Passphrases consist of multiple words separated by delimiters. Each word is formed from a fixed number of syllables. A syllable is constructed using a consonant-vowel-consonant (CVC) pattern.
+Passphrases consist of multiple words separated by delimiters. Each word is formed from a configurable number of syllables. Syllables are generated from one of five patterns, selected with a weighted random distribution that favours shorter, more pronounceable forms:
+
+| Type | Pattern | Probability |
+|------|---------|-------------|
+| 0    | CVC     | 36%         |
+| 1    | CVVC    | 28%         |
+| 2    | CVV     | 20%         |
+| 3    | CV      | 12%         |
+| 4    | VC      |  4%         |
+
+Because syllable length varies (2–4 characters), word and passphrase length are not fixed. Use `-l` to enforce a minimum length.
 
 Default Structure
 
@@ -98,19 +133,24 @@ Default Structure
         1 digit replaces a random character.
         1 random character is capitalized.
 
-Example Format
-
-```
-cvccvx-xvccvx-xvccvx
-
-v: vowel (aeiouy)
-c: consonant (bcdfghjkmnpqrstvwxz)
-x: consonant, vowel, or digit
-```
-
 Example Output
 
-```wurmos-8ajkim-citFox```
+```
+wurmos-8ajkim-citFox
+```
+
+## Entropy
+
+The `-e` flag prints an estimated entropy in bits after generating passphrases. The estimate accounts for:
+
+- The non-uniform syllable type distribution (weighted random)
+- Character pool sizes (vowels, consonants, numerics)
+- Digit placement positions
+- Uppercase placement positions
+- Delimiter pool size
+- The rejection-sampling effect of `--length` (passphrases too short are discarded and regenerated, which reduces the effective sample space)
+
+With default settings the estimate is approximately **87 bits**.
 
 ## Correctness
 

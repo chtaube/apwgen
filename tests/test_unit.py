@@ -13,17 +13,23 @@ from apwgen import apwgen
 class TestApwgenUnit(unittest.TestCase):
 
     def test_generate_syllable(self):
-        """Test that generate_syllable returns a valid syllable of length 3."""
-        syllable = apwgen.generate_syllable(apwgen.DEFAULT_VOWELS, apwgen.DEFAULT_CONSONANTS)
-        self.assertEqual(len(syllable), apwgen.syllable_length())
-        self.assertIn(syllable[0], apwgen.DEFAULT_CONSONANTS)
-        self.assertIn(syllable[1], apwgen.DEFAULT_VOWELS)
-        self.assertIn(syllable[2], apwgen.DEFAULT_CONSONANTS)
+        """Test that generate_syllable returns a syllable matching its pattern's structure."""
+        v, c = apwgen.DEFAULT_VOWELS, apwgen.DEFAULT_CONSONANTS
+        for syllable_type, (nc, nv) in enumerate(apwgen.SYLLABLE_STRUCTURES):
+            syllable = apwgen.generate_syllable(syllable_type, v, c)
+            self.assertEqual(len(syllable), nc + nv)
+            for ch in syllable:
+                self.assertIn(ch, v + c)
 
     def test_generate_word(self):
-        """Test that generate_word generates a word with the correct number of syllables."""
+        """Test that generate_word generates a word within the valid length range."""
         word = apwgen.generate_word(2, apwgen.DEFAULT_VOWELS, apwgen.DEFAULT_CONSONANTS)
-        self.assertEqual(len(word), 2*apwgen.syllable_length())  # Each syllable is 3 characters long
+        min_len = 2 * min(nc + nv for nc, nv in apwgen.SYLLABLE_STRUCTURES)
+        max_len = 2 * max(nc + nv for nc, nv in apwgen.SYLLABLE_STRUCTURES)
+        self.assertGreaterEqual(len(word), min_len)
+        self.assertLessEqual(len(word), max_len)
+        for ch in word:
+            self.assertIn(ch, apwgen.DEFAULT_VOWELS + apwgen.DEFAULT_CONSONANTS)
 
     def test_generate_wordlist(self):
         """Test that generate_wordlist returns the correct number of words."""
@@ -67,24 +73,23 @@ class TestApwgenUnit(unittest.TestCase):
             self.assertEqual(apwgen.get_lc_positions(c), result)
 
     def test_get_possible_digit_positions(self):
-        options = apwgen.get_default_options()
+        # 3 words of 6 chars → passphrase "aaaaaa-bbbbbb-cccccc"
         self.assertEqual(
-                apwgen.get_possible_digit_positions(options),
+                apwgen.get_possible_digit_positions(["aaaaaa", "bbbbbb", "cccccc"]),
                 [5, 7, 12, 14, 19])
-        options.words = 4
+        # 4 words of 6 chars
         self.assertEqual(
-                apwgen.get_possible_digit_positions(options),
+                apwgen.get_possible_digit_positions(["aaaaaa", "bbbbbb", "cccccc", "dddddd"]),
                 [5, 7, 12, 14, 19, 21, 26])
-        options.words = 3
-        options.delimiters = ''
+        # 3 words of 9 chars (3 syllables × CVC)
         self.assertEqual(
-                apwgen.get_possible_digit_positions(options),
-                [5, 6, 11, 12, 17])
-        options = apwgen.get_default_options()
-        options.syllables = 3
-        self.assertEqual(
-                apwgen.get_possible_digit_positions(options),
+                apwgen.get_possible_digit_positions(["aaaaaaaaa", "bbbbbbbbb", "ccccccccc"]),
                 [8, 10, 18, 20, 28])
+        # 3 words of 6 chars, no delimiter → passphrase "aaaaaabbbbbbcccccc"
+        self.assertEqual(
+                apwgen.get_possible_digit_positions(["aaaaaa", "bbbbbb", "cccccc"],
+                                                    delimiter_len=0),
+                [5, 6, 11, 12, 17])
 
 
 if __name__ == "__main__":

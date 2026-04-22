@@ -1,5 +1,8 @@
 from .apwgen import *
-from importlib.metadata import version
+from importlib.metadata import version, PackageNotFoundError
 
-__version__ = version("apwgen")
+try:
+    __version__ = version("apwgen")
+except PackageNotFoundError:
+    __version__ = None
 
