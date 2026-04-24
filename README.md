@@ -13,6 +13,7 @@ Clone the repository and install with:
 pip install .
 ```
 
+
 ## Usage
 
 Apwgen is used via the command line, with several configurable arguments to customize the passphrase generation process.
@@ -74,21 +75,13 @@ Custom Delimiters and Multiple Passphrases
 
 ```
 $ apwgen -w4 -d ":-/" -c5
-pazket/Dircax:3ojwiz/zactyh
-micvot-detti2:gyfsax:Cizfej
-rymxot:vutbar-kitvum/6opriK
-hyrpuv/fyxkyb-9awkyf:tuQwif
-jonvi3/nenwoh-vawpac-rUwbov
+dunciom/joxSe7:kebpo-zexri
+tuugar-9uxreab-kOoqay-niktev
+reUih:giydig/4eygvic/ceehxov
+caaduyg/baiTnok:jawx7/cabmo
+foyGee3-cuunpyih/jemzum/daqwyys
 ```
 
-Single word without upper case characters (this needs `-d=""`)
-
-This might be useful for generating a randomized prefix/suffix for usernames, mail addresses, etc. Don't use this for passwords!
-
-```
-$ apwgen -w1 -u0 -d=""
-wikwe0
-```
 
 Minimum length
 
@@ -109,10 +102,24 @@ vurxaFpuo-toapiic-6urqoah
 Estimated entropy: 85.3 bits
 ```
 
+Single word without upper case characters
+
+This might be useful for generating a randomized prefix/suffix for usernames, mail addresses, etc. Don't use this for passwords!
+
+```
+$ apwgen -w1 -u0 -c5 -e
+pysj1
+jeku0
+xoepqu0
+qeny5
+tautyy4
+Estimated entropy: 29.0 bits
+```
+
 
 ## Password Format
 
-Passphrases consist of multiple words separated by delimiters. Each word is formed from a configurable number of syllables. Syllables are generated from one of five patterns, selected with a weighted random distribution that favours shorter, more pronounceable forms:
+Passphrases consist of multiple words separated by delimiters. Each word is formed from a configurable number of syllables. Syllables are generated from one of five patterns, selected with a weighted random distribution that favours longer patterns:
 
 | Type | Pattern | Probability |
 |------|---------|-------------|
@@ -121,6 +128,8 @@ Passphrases consist of multiple words separated by delimiters. Each word is form
 | 2    | CVV     | 20%         |
 | 3    | CV      | 12%         |
 | 4    | VC      |  4%         |
+
+C=consonant, V=vowel
 
 Because syllable length varies (2–4 characters), word and passphrase length are not fixed. Use `-l` to enforce a minimum length.
 
@@ -136,7 +145,27 @@ Default Structure
 Example Output
 
 ```
-wurmos-8ajkim-citFox
+❯ apwgen -c20
+bivguk-muihay-5Euvkoy
+iwqiy-kiacjyk-paBny1
+quWxaoc-geri4-qiaqag
+cuhO2-hucpoiw-qenpy
+jiHuo-goomqy0-mymyun
+qawbo1-jaskyo-xibuOd
+vobaur-togjye4-xiVqei
+soapqeur-jarzuc-2afmEg
+fybmEj-coxkoy6-qytwou
+sizdeeM-paenuus-9edoig
+zyJi-hujhie-8owoo
+xoadgot-fomfi1-caApdyn
+fixzaA-3eufeo-vefav
+paimk7-jufayx-Kasmayt
+meafi-4Extug-zakye
+jaepuo-0osHa-gyiggoa
+pyexu-6uvdeM-kaosve
+keebboo-deicae7-ryUxmid
+gecna7-titUo-jicbyi
+rafay-vErye3-xahhyow
 ```
 
 ## Entropy
@@ -154,9 +183,13 @@ With default settings the estimate is approximately **87 bits**.
 
 ## Correctness
 
-The scripts/colorplot.py script generates a heatmap to visualize character distribution in generated passphrases. This helps analyze randomness and placement of numbers and upper case characters.
+The script at scripts/colorplot.py generates a heatmap to visualize character distribution in generated passphrases. This helps analyze randomness and placement of numbers and upper case characters.
 
-![](distribution.png)
+For Version 2.0.0:
+![](distribution-v2.png)
+
+For Version 1.x:
+![](distribution-v1.png)
 
 
 ## References

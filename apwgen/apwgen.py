@@ -30,7 +30,7 @@ SYLLABLE_PATTERNS = [
         lambda v, c: v() + c(),
     ]
 
-# (num_consonants, num_vowels) per pattern — must stay in sync with SYLLABLE_PATTERNS
+# (num_consonants, num_vowels) per pattern
 SYLLABLE_STRUCTURES = (
         (2, 1),  # CVC
         (2, 2),  # CVVC
@@ -38,6 +38,8 @@ SYLLABLE_STRUCTURES = (
         (1, 1),  # CV
         (1, 1),  # VC
     )
+assert len(SYLLABLE_PATTERNS) == len(SYLLABLE_STRUCTURES), \
+        "SYLLABLE_PATTERNS and SYLLABLE_STRUCTURES must have the same length"
 
 try:
     __version__ = version("apwgen")
@@ -171,25 +173,15 @@ def generate_wordlist(num_words, num_syllables, vowels, consonants):
 def randomized_delimiter_join(words, delimiters):
     '''
     Join the words into a passphrase with random delimiters between each word.
-    Raises ValueError when there is only word, so no delimiters can be added,
-    unless no delimiters where requested.
+    Return the words when there are no delimiters. Or simple return the word
+    when there is only one.
     '''
-    if len(delimiters) == 0:
+    if len(delimiters) == 0 or len(words) == 1:
         return ''.join(words)
-    if len(words) == 1:
-        raise ValueError('Not enough words to add delimiter between.')
     passphrase = words[0]
     for word in words[1:]:
-        passphrase += choose_delimiter(delimiters) + word
+        passphrase += secrets.choice(delimiters) + word
     return passphrase
-
-
-def choose_delimiter(delimiters):
-    '''
-    From the supplied list of delimiters, choose one randomly, or when only
-    one delimiter is supplied, return this one.
-    '''
-    return secrets.choice(delimiters)
 
 
 def get_possible_digit_positions(wordlist, delimiter_len=1):
@@ -328,9 +320,9 @@ def emit_passphrases(options):
                 err += 1
                 last_err = e
     if err > 0:
-        print(f" Passphrase generation failed for {err} passphrases. "
-              + "Check your options and retry. Last error was: \n"
-              + f" {last_err}", file=sys.stderr)
+        print(f" Passphrase generation failed for {err} passphrases. \n"
+              + " Check your options and retry. Last error was: \n"
+              + f"  {last_err}", file=sys.stderr)
     if options.entropy:
         bits = entropy_bits(options)
         if math.isinf(bits):
@@ -452,27 +444,6 @@ def validate_options(parser, options):
         parser.error(
                 'The number of uppercase letters (-u/--upper) cannot '
                 + 'be negative.')
-    # check related parameters
-    #FIXME: These checks won't work well with variable password length
-    # and have been disabled.
-
-    #lc_avail = SYLLABLE_LENGTH * options.syllables * options.words
-    #if options.allnums:
-    #    if options.num_digits > (lc_avail - options.upper):
-    #        parser.error(
-    #                'Sum of digits and upper case characters requested '
-    #                + 'exceeds length of passphrase '
-    #                + f'({options.num_digits} digits + {options.upper} '
-    #                + f'upper case > {lc_avail} available).')
-    #else:
-    #    if options.num_digits > (2*options.words-1):
-    #        parser.error(
-    #                'Too many digits requested. Maybe try adding --allnums?')
-    #if options.upper > (lc_avail - options.num_digits):
-    #    parser.error(
-    #            'Sum of digits and upper case characters requested exceeds '
-    #            + f'length of passphrase ({options.num_digits} digits + '
-    #            + f'{options.upper} upper case > {lc_avail} available).')
 
 
 def main(argv=None):

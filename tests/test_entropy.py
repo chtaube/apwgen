@@ -1,4 +1,5 @@
 import unittest
+import re
 import apwgen
 import secrets
 import collections
@@ -31,8 +32,9 @@ class TestPassphraseEntropy(unittest.TestCase):
 
     def test_correct_delimiter_usage(self):
         """Ensure delimiters are correctly placed between words."""
+        pattern = '[' + re.escape(self.options.delimiters) + ']'
         for passphrase in self.generated:
-            words = passphrase.split(self.options.delimiters)
+            words = re.split(pattern, passphrase)
             self.assertEqual(len(words), self.options.words, f"Delimiter error in: {passphrase}")
 
 if __name__ == "__main__":

@@ -36,12 +36,6 @@ class TestApwgenUnit(unittest.TestCase):
         words = apwgen.generate_wordlist(5, 2, apwgen.DEFAULT_VOWELS, apwgen.DEFAULT_CONSONANTS)
         self.assertEqual(len(words), 5)
 
-    def test_choose_delimiter(self):
-        """Test delimiter selection."""
-        delimiters = "-_/"
-        delimiter = apwgen.choose_delimiter(delimiters)
-        self.assertIn(delimiter, delimiters)
-
     def test_randomized_delimiter_join(self):
         """Test that words are properly joined by delimiters."""
         words = ["test", "word"]
@@ -90,6 +84,30 @@ class TestApwgenUnit(unittest.TestCase):
                 apwgen.get_possible_digit_positions(["aaaaaa", "bbbbbb", "cccccc"],
                                                     delimiter_len=0),
                 [5, 6, 11, 12, 17])
+        # 1 word of 5 chars → passphrase "aaaaa"
+        self.assertEqual(
+                apwgen.get_possible_digit_positions(["aaaaa"]),
+                [4])
+
+    def test_weighted_random_distribution(self):
+        """Chi-square test that weighted_random() matches its expected probability distribution."""
+        import math
+        n = len(apwgen.SYLLABLE_PATTERNS)
+        expected_probs = [(2 * (n - 1 - k) + 1) / (n * n) for k in range(n)]
+
+        num_samples = 25000
+        counts = [0] * n
+        for _ in range(num_samples):
+            counts[apwgen.weighted_random(n)] += 1
+
+        expected = [p * num_samples for p in expected_probs]
+        chi2 = sum((obs - exp) ** 2 / exp for obs, exp in zip(counts, expected))
+
+        # Critical value for chi-square with (n-1)=4 df at p=0.001 is 18.47.
+        # A correct implementation should virtually never exceed this.
+        self.assertLess(chi2, 18.47,
+                        f"weighted_random() distribution deviates from expected "
+                        f"(chi2={chi2:.2f}, counts={counts}, expected={[round(e) for e in expected]})")
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ passphrases = [apwgen.generate_passphrase(options) for _ in range(num_samples)]
 max_length = max(len(p) for p in passphrases)
 
 # Identify all unique characters in the passphrases, exclude delimiters
-unique_chars = sorted(set(''.join(passphrases)) - set(options.delimiters)) 
+unique_chars = sorted(set(''.join(passphrases)) - set(options.delimiters))
 
 # Create a mapping from character to index
 char_to_idx = {char: idx for idx, char in enumerate(unique_chars)}
